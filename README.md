@@ -1,6 +1,6 @@
-# DataHub: Decentralized Data Labeling Platform
+# DataHub: Decentralized Data Collection and Labeling Platform
 
-A decentralized platform for AI data collection, labeling, and monetization built on Filecoin Virtual Machine (FEVM).
+A decentralized platform for AI data collection, labeling, and monetization built on Filecoin Virtual Machine (FEVM) and FIlecoin as the storage layer using lighthouse sdk.
 
 ## Project Overview
 
@@ -8,7 +8,7 @@ DataHub is a decentralized platform focused on creating high-quality datasets fo
 
 1. **Decentralized Data Collection**: Anyone can contribute data to the platform
 2. **Quality Control**: Multi-reviewer consensus ensures high-quality datasets
-3. **Fair Compensation**: Contributors are rewarded with hubFIL tokens
+3. **Fair Compensation**: Contributors are rewarded with dataFIL tokens
 4. **Data Monetization**: Dataset owners earn when their data is used
 5. **Community Governance**: Community members vote on dataset validation and platform decisions
 
@@ -33,7 +33,13 @@ The platform consists of three main components:
    - Wallet integration
    - Token management
 
-3. **Python Library (Data Access)**
+3. **Backend (Server Layer)**
+- RESTful API for contract interactions
+- Filecoin storage integration
+- Token faucet for testing
+- Task, submission, and review management
+
+4. **Python Library (Data Access)**
    - Easy integration for AI developers
    - Dataset access and usage tracking
    - Monetization handling
@@ -42,13 +48,10 @@ The platform consists of three main components:
 
 ### What's Working
 
-- ✅ Smart contract deployment on Filecoin Calibration testnet
-- ✅ Task creation and management
-- ✅ Token-based reward system
-- ✅ Basic frontend for task creation and submission
-- ✅ Wallet integration (MetaMask)
-- ✅ Token faucet for testing
-- ✅ Basic DAO functionality
+- ✅ Smart contracts deployed on Filecoin Calibration testnet (see [protocol](protocol) directory) deployment.json file for contract addresses
+- ✅ frontend pages impelemented
+- ✅ backend server impelemented and connected to frontend
+- ✅ metamask wallet conencted
 
 ### What Needs Completion
 
@@ -56,63 +59,34 @@ The platform consists of three main components:
 - 🔄 Multi-reviewer consensus mechanism (partially implemented)
 - 🔄 Dataset monetization (partially implemented)
 - 🔄 Python library for dataset access (basic implementation)
-- ❌ Advanced DAO governance features
-- ❌ Comprehensive testing and security audits
-- ❌ Documentation and tutorials
+- 🔄 Advanced DAO governance features (basic implementation)
+- 🔄 End-to-end workflow
+
+
+
 
 ## Completion Plan
 
-### Short-term (1-2 weeks)
-1. Complete Filecoin storage integration
-2. Finalize multi-reviewer consensus mechanism
-3. Improve dataset monetization flow
-4. Enhance Python library functionality
-5. Add comprehensive documentation
+- Ensure end to end integration front-back, front-contracts, front-contracts, back-contracts
+- finish the python library impelmentation
+- Refernecing Validated Dataset through the DAO in the python library
+- Monetization features of Datasets
 
-### Medium-term (3-4 weeks)
-1. Implement advanced DAO governance features
-2. Conduct thorough testing and security audits
-3. Create user tutorials and guides
-4. Optimize gas usage and performance
-5. Add analytics dashboard
-
-### Long-term (2-3 months)
-1. Launch on Filecoin mainnet
-2. Implement cross-chain functionality
-3. Develop partnerships with AI companies
-4. Create a marketplace for specialized datasets
-5. Implement advanced privacy features
-
-## Getting Started
+## Getting Started 
 
 ### Prerequisites
-- Node.js (v16+)
+- Node.js 
 - npm or yarn
+- Deno
 - MetaMask wallet
 - Access to Filecoin Calibration testnet
+- have some faucet tokens from Filecoin Calibration testnet and also once running the Dapp from the token faucet the DApp
 
 ### Installation
 
 1. Clone the repository
-```bash
-git clone https://github.com/yourusername/decentralized-data-labeling.git
-cd decentralized-data-labeling
-```
 
 2. Install dependencies
-```bash
-# Install protocol dependencies
-cd protocol
-npm install
-
-# Install frontend dependencies
-cd ../front
-npm install
-
-# Install backend dependencies
-cd ../backend
-npm install
-```
 
 3. Set up environment variables
 ```bash
@@ -136,38 +110,7 @@ deno run --allow-net --allow-read --allow-env --allow-write --unstable-kv main.t
 5. Access the application
 Open your browser and navigate to `http://localhost:5173`
 
-## Using the Python Library
-
-```python
-from datahub import DataHub
-
-# Initialize the library
-datahub = DataHub(api_key="your_api_key")
-
-# Get available datasets
-datasets = datahub.list_datasets()
-
-# Load a dataset
-dataset = datahub.load_dataset("dataset_id")
-
-# Use the dataset for training
-X_train = dataset.features
-y_train = dataset.labels
-
-# Train your model
-model.fit(X_train, y_train)
-```
-
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for more details.
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Filecoin Foundation for the Decentralized Web
-- Protocol Labs
-- AI Blueprints Hackathon organizers and mentors
