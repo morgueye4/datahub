@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Direct RPC Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            margin-right: 10px;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #logs {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        .log-time {
+            color: #6c757d;
+            margin-right: 10px;
+        }
+        .log-error {
+            color: #dc3545;
+        }
+        .log-success {
+            color: #28a745;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Direct RPC Test</h1>
+    
+    <div class="card">
+        <h2>RPC Endpoints</h2>
+        <div id="endpoints">
+            <button class="endpoint-btn" data-url="https://api.calibration.node.glif.io/rpc/v1">Glif API</button>
+            <button class="endpoint-btn" data-url="https://calibration.node.glif.io/rpc/v1">Glif Node</button>
+            <button class="endpoint-btn" data-url="https://filecoin-calibration.chainup.net/rpc/v1">ChainUp</button>
+            <button class="endpoint-btn" data-url="https://filecoin-calibration.chainstacklabs.com/rpc/v1">ChainStack</button>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h2>Test Actions</h2>
+        <button id="get-block-number">Get Block Number</button>
+        <button id="get-chain-id">Get Chain ID</button>
+        <button id="get-gas-price">Get Gas Price</button>
+        <button id="get-balance">Get Balance</button>
+        <button id="call-contract">Call Contract</button>
+    </div>
+    
+    <div class="card">
+        <h2>Results</h2>
+        <pre id="result">No results yet</pre>
+    </div>
+    
+    <div class="card">
+        <h2>Logs</h2>
+        <div id="logs"></div>
+    </div>
+    
+    <script>
+        // Elements
+        const logsContainer = document.getElementById('logs');
+        const resultContainer = document.getElementById('result');
+        const endpointButtons = document.querySelectorAll('.endpoint-btn');
+        const getBlockNumberBtn = document.getElementById('get-block-number');
+        const getChainIdBtn = document.getElementById('get-chain-id');
+        const getGasPriceBtn = document.getElementById('get-gas-price');
+        const getBalanceBtn = document.getElementById('get-balance');
+        const callContractBtn = document.getElementById('call-contract');
+        
+        // Counter Contract ABI (just the getCount function)
+        const counterABI = [
+            {
+                "inputs": [],
+                "name": "getCount",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            }
+        ];
+        
+        // Contract address
+        const counterAddress = '0x1eC4295bbCD959106C065ef5A531170E702EB0Cf';
+        
+        // Current RPC endpoint
+        let currentRpcUrl = 'https://api.calibration.node.glif.io/rpc/v1';
+        
+        // Log function
+        function log(message, type = 'info') {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type === 'error' ? 'log-error' : type === 'success' ? 'log-success' : ''}`;
+            logEntry.innerHTML = `<span class="log-time">[${timeString}]</span> ${message}`;
+            logsContainer.appendChild(logEntry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+            console.log(`[${timeString}] ${message}`);
+        }
+        
+        // Show result
+        function showResult(data) {
+            resultContainer.textContent = typeof data === 'object' ? JSON.stringify(data, null, 2) : data;
+        }
+        
+        // Make RPC call
+        async function makeRpcCall(method, params = []) {
+            try {
+                log(`Making RPC call to ${currentRpcUrl}: ${method}`);
+                
+                const response = await fetch(currentRpcUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        id: Date.now(),
+                        method,
+                        params
+                    }),
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    log(`RPC error: ${JSON.stringify(data.error)}`, 'error');
+                    showResult(data.error);
+                    return null;
+                }
+                
+                log(`RPC call successful: ${method}`, 'success');
+                showResult(data.result);
+                return data.result;
+            } catch (error) {
+                log(`Error making RPC call: ${error.message}`, 'error');
+                showResult({ error: error.message });
+                return null;
+            }
+        }
+        
+        // Get block number
+        async function getBlockNumber() {
+            return makeRpcCall('eth_blockNumber');
+        }
+        
+        // Get chain ID
+        async function getChainId() {
+            return makeRpcCall('eth_chainId');
+        }
+        
+        // Get gas price
+        async function getGasPrice() {
+            return makeRpcCall('eth_gasPrice');
+        }
+        
+        // Get balance
+        async function getBalance() {
+            // Prompt for address
+            const address = prompt('Enter address to check balance:', '0x796B8F8706d2e616c17a4cBc1d824aBcf99135D3');
+            if (!address) return;
+            
+            return makeRpcCall('eth_getBalance', [address, 'latest']);
+        }
+        
+        // Call contract
+        async function callContract() {
+            // Encode the function call (getCount)
+            const functionSignature = '0x06661abd'; // keccak256('getCount()')
+            
+            return makeRpcCall('eth_call', [{
+                to: counterAddress,
+                data: functionSignature
+            }, 'latest']);
+        }
+        
+        // Set up event listeners
+        endpointButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                currentRpcUrl = button.dataset.url;
+                log(`Switched to RPC endpoint: ${currentRpcUrl}`);
+                
+                // Update active button
+                endpointButtons.forEach(btn => btn.style.opacity = '0.5');
+                button.style.opacity = '1';
+            });
+        });
+        
+        getBlockNumberBtn.addEventListener('click', getBlockNumber);
+        getChainIdBtn.addEventListener('click', getChainId);
+        getGasPriceBtn.addEventListener('click', getGasPrice);
+        getBalanceBtn.addEventListener('click', getBalance);
+        callContractBtn.addEventListener('click', callContract);
+        
+        // Initialize
+        function init() {
+            log('Direct RPC Test initialized');
+            log(`Default RPC endpoint: ${currentRpcUrl}`);
+            
+            // Set first endpoint as active
+            endpointButtons[0].style.opacity = '1';
+        }
+        
+        // Start the application when the page loads
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

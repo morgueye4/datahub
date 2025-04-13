@@ -1,0 +1,123 @@
+# Environment variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.*
+
+# Node.js dependencies
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# Frontend build files
+/front/dist/
+/front/build/
+/front/.cache/
+/front/coverage/
+/front/.next/
+/front/out/
+/front/node_modules/
+
+# Backend build files
+/backend/dist/
+/backend/build/
+/backend/.deno/
+/backend/.deno_dir/
+/backend/coverage/
+/backend/node_modules/
+
+# Protocol (Smart Contracts)
+/protocol/artifacts/
+/protocol/cache/
+/protocol/typechain/
+/protocol/typechain-types/
+/protocol/coverage/
+/protocol/coverage.json
+/protocol/deployments/localhost/
+/protocol/deployments/hardhat/
+
+# Python library
+/datadao-python/__pycache__/
+/datadao-python/*.py[cod]
+/datadao-python/*$py.class
+/datadao-python/*.so
+/datadao-python/.Python
+/datadao-python/build/
+/datadao-python/develop-eggs/
+/datadao-python/dist/
+/datadao-python/downloads/
+/datadao-python/eggs/
+/datadao-python/.eggs/
+/datadao-python/lib/
+/datadao-python/lib64/
+/datadao-python/parts/
+/datadao-python/sdist/
+/datadao-python/var/
+/datadao-python/wheels/
+/datadao-python/*.egg-info/
+/datadao-python/.installed.cfg
+/datadao-python/*.egg
+/datadao-python/.pytest_cache/
+/datadao-python/.coverage
+/datadao-python/htmlcov/
+/datadao-python/.tox/
+/datadao-python/.venv/
+/datadao-python/venv/
+/datadao-python/ENV/
+/datadao-python/.ipynb_checkpoints
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+*.sublime*
+.history/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Testing
+/coverage/
+/.nyc_output
+/cypress/videos/
+/cypress/screenshots/
+
+# Misc
+.DS_Store
+Thumbs.db
+*.pem
+.vercel
+.netlify
+.turbo
+.cache/
+dist/
+tmp/
+temp/
+
+# Deno
+.deno_plugins/
+.deno_dir/
+
+# Hardhat
+/protocol/cache/
+/protocol/artifacts/
+/protocol/node_modules/
+
+# Lighthouse
+.lighthouse/
+
+# Keep these files
+!.env.example
+!.gitkeep

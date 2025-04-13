@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Task Manager Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        #logs {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        .log-time {
+            color: #6c757d;
+            margin-right: 10px;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simple Task Manager Test</h1>
+    
+    <div class="card">
+        <h2>Contract Information</h2>
+        <p><strong>Address:</strong> <span id="contract-address">0x412dA2eF69cD17eC4CdD0CC372ffb7eF955716A2</span></p>
+        <p><strong>Network:</strong> <span id="network-name">Filecoin Calibration Testnet</span></p>
+        <button id="connect-wallet">Connect Wallet</button>
+        <div id="wallet-status"></div>
+    </div>
+    
+    <div class="card">
+        <h2>Create Task</h2>
+        <form id="create-task-form">
+            <div>
+                <label for="title">Title:</label>
+                <input type="text" id="title" value="Test Task" required>
+            </div>
+            <div>
+                <label for="description">Description:</label>
+                <textarea id="description" rows="3" required>This is a test task</textarea>
+            </div>
+            <div>
+                <label for="reward">Reward Per Submission (in tFIL):</label>
+                <input type="number" id="reward" value="0.1" min="0.001" step="0.001" required>
+            </div>
+            <div>
+                <label for="deadline">Deadline (days from now):</label>
+                <input type="number" id="deadline" value="7" min="1" required>
+            </div>
+            <div>
+                <label for="data-cid">Data CID:</label>
+                <input type="text" id="data-cid" value="bafkreib45bpzjdean37m2zjfrogu62c3nhndt7waavog3yo3gzf7mnemjy" required>
+            </div>
+            <div>
+                <label for="required-reviewers">Required Reviewers:</label>
+                <input type="number" id="required-reviewers" value="2" min="1" required>
+            </div>
+            <div>
+                <label for="nominated-reviewers">Nominated Reviewers (one address per line):</label>
+                <textarea id="nominated-reviewers" rows="3"></textarea>
+            </div>
+            <button type="submit" id="create-task-btn">Create Task</button>
+        </form>
+    </div>
+    
+    <div class="card">
+        <h2>Get Task</h2>
+        <div>
+            <label for="task-id">Task ID:</label>
+            <input type="number" id="task-id" value="1" min="1">
+            <button id="get-task-btn">Get Task</button>
+        </div>
+        <pre id="task-result">No task data</pre>
+    </div>
+    
+    <div class="card">
+        <h2>Logs</h2>
+        <div id="logs"></div>
+    </div>
+    
+    <!-- Load Web3.js -->
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.8.0/dist/web3.min.js"></script>
+    
+    <script>
+        // SimpleTaskManager ABI
+        const taskManagerABI = [
+            {
+                "inputs": [],
+                "stateMutability": "nonpayable",
+                "type": "constructor"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": true,
+                        "internalType": "address",
+                        "name": "previousOwner",
+                        "type": "address"
+                    },
+                    {
+                        "indexed": true,
+                        "internalType": "address",
+                        "name": "newOwner",
+                        "type": "address"
+                    }
+                ],
+                "name": "OwnershipTransferred",
+                "type": "event"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": true,
+                        "internalType": "uint256",
+                        "name": "taskId",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "TaskClosed",
+                "type": "event"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": true,
+                        "internalType": "uint256",
+                        "name": "taskId",
+                        "type": "uint256"
+                    },
+                    {
+                        "indexed": true,
+                        "internalType": "address",
+                        "name": "creator",
+                        "type": "address"
+                    }
+                ],
+                "name": "TaskCreated",
+                "type": "event"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "taskId",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "closeTask",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "string",
+                        "name": "title",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "string",
+                        "name": "description",
+                        "type": "string"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "rewardPerSubmission",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "deadline",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "bytes32",
+                        "name": "dataCid",
+                        "type": "bytes32"
+                    },
+                    {
+                        "internalType": "uint256",
+                        "name": "requiredReviewers",
+                        "type": "uint256"
+                    },
+                    {
+                        "internalType": "address[]",
+                        "name": "nominatedReviewers",
+                        "type": "address[]"
+                    }
+                ],
+                "name": "createTask",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "taskId",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "getTask",
+                "outputs": [
+                    {
+                        "components": [
+                            {
+                                "internalType": "uint256",
+                                "name": "id",
+                                "type": "uint256"
+                            },
+                            {
+                                "internalType": "string",
+                                "name": "title",
+                                "type": "string"
+                            },
+                            {
+                                "internalType": "string",
+                                "name": "description",
+                                "type": "string"
+                            },
+                            {
+                                "internalType": "address",
+                                "name": "creator",
+                                "type": "address"
+                            },
+                            {
+                                "internalType": "uint256",
+                                "name": "rewardPerSubmission",
+                                "type": "uint256"
+                            },
+                            {
+                                "internalType": "uint256",
+                                "name": "deadline",
+                                "type": "uint256"
+                            },
+                            {
+                                "internalType": "bytes32",
+                                "name": "dataCid",
+                                "type": "bytes32"
+                            },
+                            {
+                                "internalType": "uint256",
+                                "name": "requiredReviewers",
+                                "type": "uint256"
+                            },
+                            {
+                                "internalType": "address[]",
+                                "name": "nominatedReviewers",
+                                "type": "address[]"
+                            },
+                            {
+                                "internalType": "bool",
+                                "name": "isClosed",
+                                "type": "bool"
+                            },
+                            {
+                                "internalType": "uint256",
+                                "name": "createdAt",
+                                "type": "uint256"
+                            }
+                        ],
+                        "internalType": "struct SimpleTaskManager.Task",
+                        "name": "",
+                        "type": "tuple"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "getTaskCount",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "owner",
+                "outputs": [
+                    {
+                        "internalType": "address",
+                        "name": "",
+                        "type": "address"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "renounceOwnership",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [
+                    {
+                        "internalType": "address",
+                        "name": "newOwner",
+                        "type": "address"
+                    }
+                ],
+                "name": "transferOwnership",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            }
+        ];
+        
+        // Contract address
+        const taskManagerAddress = '0x412dA2eF69cD17eC4CdD0CC372ffb7eF955716A2';
+        
+        // Elements
+        const connectWalletBtn = document.getElementById('connect-wallet');
+        const walletStatus = document.getElementById('wallet-status');
+        const createTaskForm = document.getElementById('create-task-form');
+        const createTaskBtn = document.getElementById('create-task-btn');
+        const getTaskBtn = document.getElementById('get-task-btn');
+        const taskIdInput = document.getElementById('task-id');
+        const taskResult = document.getElementById('task-result');
+        const logsContainer = document.getElementById('logs');
+        
+        // State
+        let web3;
+        let taskManagerContract;
+        let currentAccount = null;
+        
+        // Log function
+        function log(message) {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.innerHTML = `<span class="log-time">[${timeString}]</span> ${message}`;
+            logsContainer.appendChild(logEntry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+            console.log(`[${timeString}] ${message}`);
+        }
+        
+        // Convert CID to bytes32
+        function cidToBytes32(cid) {
+            try {
+                if (!cid) return '0x0000000000000000000000000000000000000000000000000000000000000000';
+                
+                // Convert the CID to a byte array
+                const bytes = new TextEncoder().encode(cid);
+                
+                // Create a buffer of 32 bytes
+                const buffer = new Uint8Array(32);
+                
+                // Copy the CID bytes into the buffer (up to 32 bytes)
+                for (let i = 0; i < Math.min(bytes.length, 32); i++) {
+                    buffer[i] = bytes[i];
+                }
+                
+                // Convert the buffer to a hex string
+                let hexString = '0x';
+                for (let i = 0; i < buffer.length; i++) {
+                    const hex = buffer[i].toString(16).padStart(2, '0');
+                    hexString += hex;
+                }
+                
+                log(`Converted CID ${cid} to bytes32: ${hexString}`);
+                return hexString;
+            } catch (error) {
+                log(`Error converting CID to bytes32: ${error.message}`);
+                return '0x0000000000000000000000000000000000000000000000000000000000000000';
+            }
+        }
+        
+        // Initialize Web3
+        async function initWeb3() {
+            if (window.ethereum) {
+                web3 = new Web3(window.ethereum);
+                log('Web3 initialized with MetaMask');
+                return true;
+            } else {
+                log('MetaMask is not installed');
+                walletStatus.textContent = 'MetaMask is not installed. Please install MetaMask to use this application.';
+                return false;
+            }
+        }
+        
+        // Connect wallet
+        async function connectWallet() {
+            if (!web3) {
+                const initialized = await initWeb3();
+                if (!initialized) return;
+            }
+            
+            try {
+                log('Connecting wallet...');
+                
+                // Request account access
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                currentAccount = accounts[0];
+                log(`Wallet connected: ${currentAccount}`);
+                
+                // Check if we're on the correct network
+                const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                const calibrationChainId = '0x4cb2f'; // 314159 in hex
+                
+                if (chainId !== calibrationChainId) {
+                    log(`Wrong network detected. Chain ID: ${chainId}, expected: ${calibrationChainId}`);
+                    
+                    try {
+                        // Try to switch to Calibration testnet
+                        await window.ethereum.request({
+                            method: 'wallet_switchEthereumChain',
+                            params: [{ chainId: calibrationChainId }],
+                        });
+                        log('Switched to Filecoin Calibration testnet');
+                    } catch (switchError) {
+                        // This error code indicates that the chain has not been added to MetaMask
+                        if (switchError.code === 4902) {
+                            try {
+                                await window.ethereum.request({
+                                    method: 'wallet_addEthereumChain',
+                                    params: [
+                                        {
+                                            chainId: calibrationChainId,
+                                            chainName: 'Filecoin Calibration Testnet',
+                                            nativeCurrency: {
+                                                name: 'testnet filecoin',
+                                                symbol: 'tFIL',
+                                                decimals: 18,
+                                            },
+                                            rpcUrls: ['https://api.calibration.node.glif.io/rpc/v1'],
+                                            blockExplorerUrls: ['https://calibration.filfox.info/en'],
+                                        },
+                                    ],
+                                });
+                                log('Added Filecoin Calibration testnet to MetaMask');
+                            } catch (addError) {
+                                log(`Failed to add network: ${addError.message}`);
+                                walletStatus.textContent = `Failed to add network: ${addError.message}`;
+                                return;
+                            }
+                        } else {
+                            log(`Failed to switch network: ${switchError.message}`);
+                            walletStatus.textContent = `Failed to switch network: ${switchError.message}`;
+                            return;
+                        }
+                    }
+                }
+                
+                // Initialize contract
+                taskManagerContract = new web3.eth.Contract(taskManagerABI, taskManagerAddress);
+                log('Contract initialized');
+                
+                // Update UI
+                walletStatus.textContent = `Connected: ${currentAccount}`;
+                createTaskBtn.disabled = false;
+                getTaskBtn.disabled = false;
+                
+                // Setup event listeners for MetaMask
+                window.ethereum.on('accountsChanged', handleAccountsChanged);
+                window.ethereum.on('chainChanged', () => window.location.reload());
+                
+                // Get task count
+                const taskCount = await taskManagerContract.methods.getTaskCount().call();
+                log(`Current task count: ${taskCount}`);
+            } catch (error) {
+                log(`Error connecting wallet: ${error.message}`);
+                walletStatus.textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        // Handle accounts changed
+        function handleAccountsChanged(accounts) {
+            if (accounts.length === 0) {
+                // MetaMask is locked or the user has not connected any accounts
+                currentAccount = null;
+                walletStatus.textContent = 'Wallet disconnected';
+                createTaskBtn.disabled = true;
+                getTaskBtn.disabled = true;
+            } else if (accounts[0] !== currentAccount) {
+                currentAccount = accounts[0];
+                walletStatus.textContent = `Connected: ${currentAccount}`;
+                log(`Account changed to: ${currentAccount}`);
+            }
+        }
+        
+        // Create task
+        async function createTask(event) {
+            event.preventDefault();
+            
+            if (!taskManagerContract || !currentAccount) {
+                log('Contract not initialized or wallet not connected');
+                return;
+            }
+            
+            try {
+                createTaskBtn.disabled = true;
+                createTaskBtn.textContent = 'Creating...';
+                
+                // Get form values
+                const title = document.getElementById('title').value;
+                const description = document.getElementById('description').value;
+                const rewardPerSubmission = document.getElementById('reward').value;
+                const deadlineDays = document.getElementById('deadline').value;
+                const dataCid = document.getElementById('data-cid').value;
+                const requiredReviewers = document.getElementById('required-reviewers').value;
+                const nominatedReviewersText = document.getElementById('nominated-reviewers').value;
+                
+                // Process nominated reviewers
+                let nominatedReviewers = [];
+                if (nominatedReviewersText) {
+                    nominatedReviewers = nominatedReviewersText
+                        .split('\n')
+                        .map(addr => addr.trim())
+                        .filter(addr => addr.length > 0 && addr.startsWith('0x'));
+                }
+                
+                // Convert reward to wei
+                const rewardInWei = web3.utils.toWei(rewardPerSubmission, 'ether');
+                
+                // Calculate deadline timestamp
+                const deadlineTimestamp = Math.floor(Date.now() / 1000) + (parseInt(deadlineDays) * 24 * 60 * 60);
+                
+                // Convert CID to bytes32
+                const dataCidBytes32 = cidToBytes32(dataCid);
+                
+                log('Creating task with parameters:');
+                log(`Title: ${title}`);
+                log(`Description: ${description}`);
+                log(`Reward: ${rewardPerSubmission} tFIL (${rewardInWei} wei)`);
+                log(`Deadline: ${deadlineTimestamp} (${new Date(deadlineTimestamp * 1000).toLocaleString()})`);
+                log(`Data CID: ${dataCid} (${dataCidBytes32})`);
+                log(`Required Reviewers: ${requiredReviewers}`);
+                log(`Nominated Reviewers: ${nominatedReviewers.join(', ') || 'None'}`);
+                
+                // Get gas price and add 100%
+                const gasPrice = await web3.eth.getGasPrice();
+                const gasPriceHex = web3.utils.toHex(Math.floor(gasPrice * 2));
+                log(`Gas price: ${web3.utils.fromWei(gasPrice, 'gwei')} gwei, using: ${web3.utils.fromWei(gasPriceHex, 'gwei')} gwei`);
+                
+                // Estimate gas
+                const gasEstimate = await taskManagerContract.methods.createTask(
+                    title,
+                    description,
+                    rewardInWei,
+                    deadlineTimestamp,
+                    dataCidBytes32,
+                    requiredReviewers,
+                    nominatedReviewers
+                ).estimateGas({ from: currentAccount });
+                
+                const gasLimitHex = web3.utils.toHex(Math.floor(gasEstimate * 1.2)); // Add 20% buffer
+                log(`Gas estimate: ${gasEstimate}, using limit: ${gasLimitHex}`);
+                
+                // Send transaction
+                const tx = await taskManagerContract.methods.createTask(
+                    title,
+                    description,
+                    rewardInWei,
+                    deadlineTimestamp,
+                    dataCidBytes32,
+                    requiredReviewers,
+                    nominatedReviewers
+                ).send({
+                    from: currentAccount,
+                    gas: gasLimitHex,
+                    gasPrice: gasPriceHex
+                });
+                
+                log(`Transaction sent: ${tx.transactionHash}`);
+                log(`Task created with ID: ${tx.events.TaskCreated.returnValues.taskId}`);
+                
+                // Update task ID input
+                taskIdInput.value = tx.events.TaskCreated.returnValues.taskId;
+                
+                // Get task details
+                await getTask();
+            } catch (error) {
+                log(`Error creating task: ${error.message}`);
+                if (error.code === 4001) {
+                    log('Transaction rejected by user');
+                }
+            } finally {
+                createTaskBtn.disabled = false;
+                createTaskBtn.textContent = 'Create Task';
+            }
+        }
+        
+        // Get task
+        async function getTask() {
+            if (!taskManagerContract) {
+                log('Contract not initialized');
+                return;
+            }
+            
+            try {
+                const taskId = taskIdInput.value;
+                log(`Getting task ${taskId}...`);
+                
+                const task = await taskManagerContract.methods.getTask(taskId).call();
+                log(`Task retrieved: ${JSON.stringify(task)}`);
+                
+                // Format task data
+                const formattedTask = {
+                    id: task.id,
+                    title: task.title,
+                    description: task.description,
+                    creator: task.creator,
+                    rewardPerSubmission: web3.utils.fromWei(task.rewardPerSubmission, 'ether') + ' tFIL',
+                    deadline: new Date(task.deadline * 1000).toLocaleString(),
+                    dataCid: task.dataCid,
+                    requiredReviewers: task.requiredReviewers,
+                    nominatedReviewers: task.nominatedReviewers,
+                    isClosed: task.isClosed,
+                    createdAt: new Date(task.createdAt * 1000).toLocaleString()
+                };
+                
+                // Display task data
+                taskResult.textContent = JSON.stringify(formattedTask, null, 2);
+            } catch (error) {
+                log(`Error getting task: ${error.message}`);
+                taskResult.textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        // Set up event listeners
+        connectWalletBtn.addEventListener('click', connectWallet);
+        createTaskForm.addEventListener('submit', createTask);
+        getTaskBtn.addEventListener('click', getTask);
+        
+        // Initialize
+        async function init() {
+            log('Simple Task Manager Test initialized');
+            
+            // Try to initialize Web3 and check if MetaMask is already connected
+            const initialized = await initWeb3();
+            if (initialized && window.ethereum.selectedAddress) {
+                log('MetaMask is already connected. Connecting automatically...');
+                connectWallet();
+            } else {
+                createTaskBtn.disabled = true;
+                getTaskBtn.disabled = true;
+            }
+        }
+        
+        // Start the application when the page loads
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

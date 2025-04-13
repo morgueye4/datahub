@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Counter Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .count-display {
+            font-size: 48px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button.primary {
+            background-color: #007bff;
+            color: white;
+        }
+        button.danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .alert {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .alert-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .text-break {
+            word-break: break-all;
+        }
+        #logs {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        .log-time {
+            color: #6c757d;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simple Counter Test</h1>
+    
+    <div class="card">
+        <h2>Contract Information</h2>
+        <p><strong>Address:</strong> <span id="contract-address" class="text-break">0x4D99d3Cff9207272202c3AF78221E14432f13e46</span></p>
+        <p><strong>Network:</strong> <span id="network-name">Filecoin Calibration Testnet</span></p>
+    </div>
+    
+    <div class="card">
+        <h2>Counter</h2>
+        <div class="count-display" id="count">Loading...</div>
+        
+        <div class="button-group">
+            <button id="connect-wallet" class="primary">Connect Wallet</button>
+            <button id="refresh-count" class="primary" disabled>Refresh Count</button>
+            <button id="increment-btn" class="primary" disabled>Increment</button>
+            <button id="reset-btn" class="danger" disabled>Reset</button>
+        </div>
+        
+        <div id="status-message"></div>
+        <div id="tx-info"></div>
+    </div>
+    
+    <div class="card">
+        <h2>Logs</h2>
+        <div id="logs"></div>
+    </div>
+    
+    <!-- Load Web3.js -->
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.8.0/dist/web3.min.js"></script>
+    
+    <script>
+        // SimpleCounter Contract ABI
+        const counterABI = [
+            {
+                "inputs": [],
+                "stateMutability": "nonpayable",
+                "type": "constructor"
+            },
+            {
+                "inputs": [],
+                "name": "count",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "increment",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "reset",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            }
+        ];
+        
+        // Contract address
+        const counterAddress = '0x4D99d3Cff9207272202c3AF78221E14432f13e46';
+        
+        // Elements
+        const countDisplay = document.getElementById('count');
+        const connectWalletBtn = document.getElementById('connect-wallet');
+        const refreshCountBtn = document.getElementById('refresh-count');
+        const incrementBtn = document.getElementById('increment-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const statusMessage = document.getElementById('status-message');
+        const txInfo = document.getElementById('tx-info');
+        const logsContainer = document.getElementById('logs');
+        
+        // State
+        let web3;
+        let counterContract;
+        let currentAccount = null;
+        
+        // Log function
+        function log(message) {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.innerHTML = `<span class="log-time">[${timeString}]</span> ${message}`;
+            logsContainer.appendChild(logEntry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+            console.log(`[${timeString}] ${message}`);
+        }
+        
+        // Show error message
+        function showError(message) {
+            statusMessage.innerHTML = `<div class="alert alert-danger">${message}</div>`;
+            log(`ERROR: ${message}`);
+        }
+        
+        // Show info message
+        function showInfo(message) {
+            statusMessage.innerHTML = `<div class="alert alert-info">${message}</div>`;
+            log(`INFO: ${message}`);
+        }
+        
+        // Show success message
+        function showSuccess(message) {
+            statusMessage.innerHTML = `<div class="alert alert-success">${message}</div>`;
+            log(`SUCCESS: ${message}`);
+        }
+        
+        // Initialize Web3
+        async function initWeb3() {
+            if (window.ethereum) {
+                web3 = new Web3(window.ethereum);
+                log('Web3 initialized with MetaMask');
+                return true;
+            } else {
+                showError('MetaMask is not installed. Please install MetaMask to use this application.');
+                return false;
+            }
+        }
+        
+        // Connect wallet
+        async function connectWallet() {
+            if (!web3) {
+                const initialized = await initWeb3();
+                if (!initialized) return;
+            }
+            
+            try {
+                showInfo('Connecting wallet...');
+                
+                // Request account access
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                currentAccount = accounts[0];
+                log(`Wallet connected: ${currentAccount}`);
+                
+                // Check if we're on the correct network
+                const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                const calibrationChainId = '0x4cb2f'; // 314159 in hex
+                
+                if (chainId !== calibrationChainId) {
+                    log(`Wrong network detected. Chain ID: ${chainId}, expected: ${calibrationChainId}`);
+                    
+                    try {
+                        // Try to switch to Calibration testnet
+                        await window.ethereum.request({
+                            method: 'wallet_switchEthereumChain',
+                            params: [{ chainId: calibrationChainId }],
+                        });
+                        log('Switched to Filecoin Calibration testnet');
+                    } catch (switchError) {
+                        // This error code indicates that the chain has not been added to MetaMask
+                        if (switchError.code === 4902) {
+                            try {
+                                await window.ethereum.request({
+                                    method: 'wallet_addEthereumChain',
+                                    params: [
+                                        {
+                                            chainId: calibrationChainId,
+                                            chainName: 'Filecoin Calibration Testnet',
+                                            nativeCurrency: {
+                                                name: 'testnet filecoin',
+                                                symbol: 'tFIL',
+                                                decimals: 18,
+                                            },
+                                            rpcUrls: ['https://api.calibration.node.glif.io/rpc/v1'],
+                                            blockExplorerUrls: ['https://calibration.filfox.info/en'],
+                                        },
+                                    ],
+                                });
+                                log('Added Filecoin Calibration testnet to MetaMask');
+                            } catch (addError) {
+                                showError(`Failed to add network: ${addError.message}`);
+                                return;
+                            }
+                        } else {
+                            showError(`Failed to switch network: ${switchError.message}`);
+                            return;
+                        }
+                    }
+                }
+                
+                // Initialize contract
+                counterContract = new web3.eth.Contract(counterABI, counterAddress);
+                log('Contract initialized');
+                
+                // Enable buttons
+                refreshCountBtn.disabled = false;
+                incrementBtn.disabled = false;
+                resetBtn.disabled = false;
+                
+                // Update count
+                await refreshCount();
+                
+                showSuccess('Wallet connected successfully!');
+                
+                // Setup event listeners for MetaMask
+                window.ethereum.on('accountsChanged', handleAccountsChanged);
+                window.ethereum.on('chainChanged', () => window.location.reload());
+            } catch (error) {
+                showError(`Failed to connect wallet: ${error.message}`);
+            }
+        }
+        
+        // Handle accounts changed
+        function handleAccountsChanged(accounts) {
+            if (accounts.length === 0) {
+                // MetaMask is locked or the user has not connected any accounts
+                currentAccount = null;
+                refreshCountBtn.disabled = true;
+                incrementBtn.disabled = true;
+                resetBtn.disabled = true;
+                showInfo('Please connect your MetaMask wallet.');
+            } else if (accounts[0] !== currentAccount) {
+                currentAccount = accounts[0];
+                showInfo('Account changed.');
+            }
+        }
+        
+        // Refresh count
+        async function refreshCount() {
+            if (!counterContract) {
+                showError('Contract not initialized');
+                return;
+            }
+            
+            try {
+                countDisplay.textContent = 'Loading...';
+                
+                // Call the count function
+                const count = await counterContract.methods.count().call();
+                countDisplay.textContent = count;
+                log(`Count refreshed: ${count}`);
+                
+                // Disable reset button if count is 0
+                resetBtn.disabled = count == 0;
+            } catch (error) {
+                countDisplay.textContent = 'Error';
+                showError(`Failed to get count: ${error.message}`);
+            }
+        }
+        
+        // Increment counter
+        async function incrementCounter() {
+            if (!counterContract || !currentAccount) {
+                showError('Contract not initialized or wallet not connected');
+                return;
+            }
+            
+            try {
+                incrementBtn.disabled = true;
+                resetBtn.disabled = true;
+                showInfo('Incrementing counter...');
+                
+                // Get gas price and add 100%
+                const gasPrice = await web3.eth.getGasPrice();
+                const gasPriceHex = web3.utils.toHex(Math.floor(gasPrice * 2));
+                log(`Gas price: ${web3.utils.fromWei(gasPrice, 'gwei')} gwei, using: ${web3.utils.fromWei(gasPriceHex, 'gwei')} gwei`);
+                
+                // Estimate gas
+                const gasEstimate = await counterContract.methods.increment().estimateGas({ from: currentAccount });
+                const gasLimitHex = web3.utils.toHex(Math.floor(gasEstimate * 1.2)); // Add 20% buffer
+                log(`Gas estimate: ${gasEstimate}, using limit: ${gasLimitHex}`);
+                
+                // Send transaction
+                const tx = await counterContract.methods.increment().send({
+                    from: currentAccount,
+                    gas: gasLimitHex,
+                    gasPrice: gasPriceHex
+                });
+                
+                log(`Transaction sent: ${tx.transactionHash}`);
+                
+                // Show transaction info
+                txInfo.innerHTML = `
+                    <div class="alert alert-info">
+                        <strong>Transaction Hash:</strong> 
+                        <a href="https://calibration.filfox.info/en/message/${tx.transactionHash}" target="_blank" class="text-break">
+                            ${tx.transactionHash}
+                        </a>
+                    </div>
+                `;
+                
+                showSuccess('Counter incremented successfully!');
+                
+                // Refresh count
+                await refreshCount();
+            } catch (error) {
+                log(`Error details: ${JSON.stringify(error)}`);
+                
+                let errorMessage = error.message;
+                if (error.code === 4001) {
+                    errorMessage = 'Transaction rejected by user.';
+                }
+                
+                showError(`Failed to increment counter: ${errorMessage}`);
+            } finally {
+                incrementBtn.disabled = false;
+                resetBtn.disabled = false;
+            }
+        }
+        
+        // Reset counter
+        async function resetCounter() {
+            if (!counterContract || !currentAccount) {
+                showError('Contract not initialized or wallet not connected');
+                return;
+            }
+            
+            try {
+                incrementBtn.disabled = true;
+                resetBtn.disabled = true;
+                showInfo('Resetting counter...');
+                
+                // Get gas price and add 100%
+                const gasPrice = await web3.eth.getGasPrice();
+                const gasPriceHex = web3.utils.toHex(Math.floor(gasPrice * 2));
+                log(`Gas price: ${web3.utils.fromWei(gasPrice, 'gwei')} gwei, using: ${web3.utils.fromWei(gasPriceHex, 'gwei')} gwei`);
+                
+                // Estimate gas
+                const gasEstimate = await counterContract.methods.reset().estimateGas({ from: currentAccount });
+                const gasLimitHex = web3.utils.toHex(Math.floor(gasEstimate * 1.2)); // Add 20% buffer
+                log(`Gas estimate: ${gasEstimate}, using limit: ${gasLimitHex}`);
+                
+                // Send transaction
+                const tx = await counterContract.methods.reset().send({
+                    from: currentAccount,
+                    gas: gasLimitHex,
+                    gasPrice: gasPriceHex
+                });
+                
+                log(`Transaction sent: ${tx.transactionHash}`);
+                
+                // Show transaction info
+                txInfo.innerHTML = `
+                    <div class="alert alert-info">
+                        <strong>Transaction Hash:</strong> 
+                        <a href="https://calibration.filfox.info/en/message/${tx.transactionHash}" target="_blank" class="text-break">
+                            ${tx.transactionHash}
+                        </a>
+                    </div>
+                `;
+                
+                showSuccess('Counter reset successfully!');
+                
+                // Refresh count
+                await refreshCount();
+            } catch (error) {
+                log(`Error details: ${JSON.stringify(error)}`);
+                
+                let errorMessage = error.message;
+                if (error.code === 4001) {
+                    errorMessage = 'Transaction rejected by user.';
+                }
+                
+                showError(`Failed to reset counter: ${errorMessage}`);
+            } finally {
+                incrementBtn.disabled = false;
+                resetBtn.disabled = false;
+            }
+        }
+        
+        // Set up event listeners
+        connectWalletBtn.addEventListener('click', connectWallet);
+        refreshCountBtn.addEventListener('click', refreshCount);
+        incrementBtn.addEventListener('click', incrementCounter);
+        resetBtn.addEventListener('click', resetCounter);
+        
+        // Initialize
+        async function init() {
+            log('Simple Counter Test initialized');
+            
+            // Try to initialize Web3 and check if MetaMask is already connected
+            const initialized = await initWeb3();
+            if (initialized && window.ethereum.selectedAddress) {
+                log('MetaMask is already connected. Connecting automatically...');
+                connectWallet();
+            }
+        }
+        
+        // Start the application when the page loads
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

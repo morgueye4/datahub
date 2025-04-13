@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Counter Contract Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .count-display {
+            font-size: 48px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button.primary {
+            background-color: #007bff;
+            color: white;
+        }
+        button.danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .alert {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .alert-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .text-break {
+            word-break: break-all;
+        }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: #007bff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        #logs {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        .log-time {
+            color: #6c757d;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Counter Contract Test</h1>
+    
+    <div class="card">
+        <h2>Contract Information</h2>
+        <p><strong>Address:</strong> <span id="contract-address" class="text-break">0x1eC4295bbCD959106C065ef5A531170E702EB0Cf</span></p>
+        <p><strong>Network:</strong> <span id="network-name">Filecoin Calibration Testnet</span></p>
+        <p><strong>Chain ID:</strong> <span id="chain-id">314159</span></p>
+    </div>
+    
+    <div class="card">
+        <h2>Wallet Connection</h2>
+        <div id="wallet-status">Not connected</div>
+        <button id="connect-wallet" class="primary">Connect Wallet</button>
+        <div id="wallet-address"></div>
+    </div>
+    
+    <div class="card">
+        <h2>Counter</h2>
+        <div class="count-display" id="count">0</div>
+        
+        <div class="button-group">
+            <button id="increment-btn" class="primary" disabled>Increment</button>
+            <button id="reset-btn" class="danger" disabled>Reset</button>
+        </div>
+        
+        <div id="status-message"></div>
+        <div id="tx-info"></div>
+    </div>
+    
+    <div class="card">
+        <h2>Logs</h2>
+        <div id="logs"></div>
+    </div>
+    
+    <!-- Load Web3.js -->
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.8.0/dist/web3.min.js"></script>
+    
+    <script>
+        // Counter Contract ABI
+        const counterABI = [
+            {
+                "inputs": [],
+                "stateMutability": "nonpayable",
+                "type": "constructor"
+            },
+            {
+                "anonymous": false,
+                "inputs": [],
+                "name": "CountReset",
+                "type": "event"
+            },
+            {
+                "anonymous": false,
+                "inputs": [
+                    {
+                        "indexed": false,
+                        "internalType": "uint256",
+                        "name": "newCount",
+                        "type": "uint256"
+                    }
+                ],
+                "name": "CountIncremented",
+                "type": "event"
+            },
+            {
+                "inputs": [],
+                "name": "getCount",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "increment",
+                "outputs": [
+                    {
+                        "internalType": "uint256",
+                        "name": "",
+                        "type": "uint256"
+                    }
+                ],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            },
+            {
+                "inputs": [],
+                "name": "reset",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function"
+            }
+        ];
+        
+        // Contract address
+        const counterAddress = '0x1eC4295bbCD959106C065ef5A531170E702EB0Cf';
+        
+        // RPC endpoints to try
+        const rpcEndpoints = [
+            'https://api.calibration.node.glif.io/rpc/v1',
+            'https://calibration.node.glif.io/rpc/v1',
+            'https://filecoin-calibration.chainup.net/rpc/v1',
+            'https://filecoin-calibration.chainstacklabs.com/rpc/v1'
+        ];
+        
+        // Elements
+        const connectWalletBtn = document.getElementById('connect-wallet');
+        const walletStatus = document.getElementById('wallet-status');
+        const walletAddress = document.getElementById('wallet-address');
+        const countDisplay = document.getElementById('count');
+        const incrementBtn = document.getElementById('increment-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const statusMessage = document.getElementById('status-message');
+        const txInfo = document.getElementById('tx-info');
+        const logsContainer = document.getElementById('logs');
+        
+        // State
+        let web3;
+        let counterContract;
+        let currentAccount = null;
+        let currentCount = 0;
+        let isIncrementing = false;
+        let isResetting = false;
+        
+        // Log function
+        function log(message) {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.innerHTML = `<span class="log-time">[${timeString}]</span> ${message}`;
+            logsContainer.appendChild(logEntry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+            console.log(`[${timeString}] ${message}`);
+        }
+        
+        // Show error message
+        function showError(message) {
+            statusMessage.innerHTML = `<div class="alert alert-danger">${message}</div>`;
+            log(`ERROR: ${message}`);
+        }
+        
+        // Show info message
+        function showInfo(message) {
+            statusMessage.innerHTML = `<div class="alert alert-info">${message}</div>`;
+            log(`INFO: ${message}`);
+        }
+        
+        // Show success message
+        function showSuccess(message) {
+            statusMessage.innerHTML = `<div class="alert alert-success">${message}</div>`;
+            log(`SUCCESS: ${message}`);
+        }
+        
+        // Initialize Web3 with the first working RPC endpoint
+        async function initWeb3() {
+            if (window.ethereum) {
+                try {
+                    // Try each RPC endpoint
+                    for (const rpcUrl of rpcEndpoints) {
+                        try {
+                            log(`Trying RPC endpoint: ${rpcUrl}`);
+                            web3 = new Web3(rpcUrl);
+                            
+                            // Test the connection
+                            const blockNumber = await web3.eth.getBlockNumber();
+                            log(`Connected to RPC endpoint: ${rpcUrl}, block number: ${blockNumber}`);
+                            
+                            // Initialize contract
+                            counterContract = new web3.eth.Contract(counterABI, counterAddress);
+                            
+                            // Try to get the count to verify contract connection
+                            try {
+                                const count = await counterContract.methods.getCount().call();
+                                log(`Contract connected, current count: ${count}`);
+                                currentCount = count;
+                                countDisplay.textContent = count;
+                                return true;
+                            } catch (contractError) {
+                                log(`Error connecting to contract: ${contractError.message}`);
+                            }
+                        } catch (rpcError) {
+                            log(`Failed to connect to RPC endpoint: ${rpcUrl}, error: ${rpcError.message}`);
+                        }
+                    }
+                    
+                    // If we get here, none of the RPC endpoints worked
+                    showError('Failed to connect to any RPC endpoint. Please try again later.');
+                    return false;
+                } catch (error) {
+                    showError(`Error initializing Web3: ${error.message}`);
+                    return false;
+                }
+            } else {
+                showError('MetaMask is not installed. Please install MetaMask to use this application.');
+                return false;
+            }
+        }
+        
+        // Connect wallet
+        async function connectWallet() {
+            if (window.ethereum) {
+                try {
+                    walletStatus.innerHTML = '<div class="spinner"></div> Connecting...';
+                    
+                    // Request account access
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    currentAccount = accounts[0];
+                    
+                    // Check if we're on the correct network
+                    const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+                    const calibrationChainId = '0x4cb2f'; // 314159 in hex
+                    
+                    if (chainId !== calibrationChainId) {
+                        log(`Wrong network detected. Chain ID: ${chainId}, expected: ${calibrationChainId}`);
+                        
+                        try {
+                            // Try to switch to Calibration testnet
+                            await window.ethereum.request({
+                                method: 'wallet_switchEthereumChain',
+                                params: [{ chainId: calibrationChainId }],
+                            });
+                            log('Switched to Filecoin Calibration testnet');
+                        } catch (switchError) {
+                            // This error code indicates that the chain has not been added to MetaMask
+                            if (switchError.code === 4902) {
+                                try {
+                                    await window.ethereum.request({
+                                        method: 'wallet_addEthereumChain',
+                                        params: [
+                                            {
+                                                chainId: calibrationChainId,
+                                                chainName: 'Filecoin Calibration Testnet',
+                                                nativeCurrency: {
+                                                    name: 'testnet filecoin',
+                                                    symbol: 'tFIL',
+                                                    decimals: 18,
+                                                },
+                                                rpcUrls: rpcEndpoints,
+                                                blockExplorerUrls: ['https://calibration.filfox.info/en'],
+                                            },
+                                        ],
+                                    });
+                                    log('Added Filecoin Calibration testnet to MetaMask');
+                                } catch (addError) {
+                                    showError(`Failed to add network: ${addError.message}`);
+                                    return;
+                                }
+                            } else {
+                                showError(`Failed to switch network: ${switchError.message}`);
+                                return;
+                            }
+                        }
+                    }
+                    
+                    // Initialize Web3 with MetaMask provider
+                    web3 = new Web3(window.ethereum);
+                    
+                    // Initialize contract
+                    counterContract = new web3.eth.Contract(counterABI, counterAddress);
+                    
+                    // Update UI
+                    walletStatus.textContent = 'Connected';
+                    walletAddress.textContent = `Address: ${currentAccount}`;
+                    
+                    // Enable buttons
+                    incrementBtn.disabled = false;
+                    resetBtn.disabled = false;
+                    
+                    // Get current count
+                    await updateCount();
+                    
+                    // Setup event listeners for MetaMask
+                    window.ethereum.on('accountsChanged', handleAccountsChanged);
+                    window.ethereum.on('chainChanged', () => window.location.reload());
+                    
+                    showSuccess('Wallet connected successfully!');
+                } catch (error) {
+                    walletStatus.textContent = 'Not connected';
+                    showError(`Failed to connect wallet: ${error.message}`);
+                }
+            } else {
+                showError('MetaMask is not installed. Please install MetaMask to use this application.');
+            }
+        }
+        
+        // Handle accounts changed
+        function handleAccountsChanged(accounts) {
+            if (accounts.length === 0) {
+                // MetaMask is locked or the user has not connected any accounts
+                currentAccount = null;
+                walletStatus.textContent = 'Not connected';
+                walletAddress.textContent = '';
+                incrementBtn.disabled = true;
+                resetBtn.disabled = true;
+                showInfo('Please connect your MetaMask wallet.');
+            } else if (accounts[0] !== currentAccount) {
+                currentAccount = accounts[0];
+                walletAddress.textContent = `Address: ${currentAccount}`;
+                showInfo('Account changed.');
+            }
+        }
+        
+        // Update count
+        async function updateCount() {
+            try {
+                const count = await counterContract.methods.getCount().call();
+                currentCount = count;
+                countDisplay.textContent = count;
+                log(`Count updated: ${count}`);
+                
+                // Disable reset button if count is 0
+                resetBtn.disabled = count == 0 || isResetting;
+            } catch (error) {
+                showError(`Failed to get count: ${error.message}`);
+            }
+        }
+        
+        // Increment counter
+        async function incrementCounter() {
+            if (!currentAccount) {
+                showError('Please connect your wallet first.');
+                return;
+            }
+            
+            if (isIncrementing) return;
+            
+            try {
+                isIncrementing = true;
+                incrementBtn.innerHTML = '<div class="spinner"></div> Incrementing...';
+                incrementBtn.disabled = true;
+                resetBtn.disabled = true;
+                
+                showInfo('Incrementing counter...');
+                
+                // Get gas price and add 100%
+                const gasPrice = await web3.eth.getGasPrice();
+                const gasPriceHex = web3.utils.toHex(Math.floor(gasPrice * 2));
+                log(`Gas price: ${web3.utils.fromWei(gasPrice, 'gwei')} gwei, using: ${web3.utils.fromWei(gasPriceHex, 'gwei')} gwei`);
+                
+                // Estimate gas
+                const gasEstimate = await counterContract.methods.increment().estimateGas({ from: currentAccount });
+                const gasLimitHex = web3.utils.toHex(Math.floor(gasEstimate * 1.2)); // Add 20% buffer
+                log(`Gas estimate: ${gasEstimate}, using limit: ${gasLimitHex}`);
+                
+                // Send transaction
+                const tx = await counterContract.methods.increment().send({
+                    from: currentAccount,
+                    gas: gasLimitHex,
+                    gasPrice: gasPriceHex
+                });
+                
+                log(`Transaction sent: ${tx.transactionHash}`);
+                
+                // Show transaction info
+                txInfo.innerHTML = `
+                    <div class="alert alert-info">
+                        <strong>Transaction Hash:</strong> 
+                        <a href="https://calibration.filfox.info/en/message/${tx.transactionHash}" target="_blank" class="text-break">
+                            ${tx.transactionHash}
+                        </a>
+                    </div>
+                `;
+                
+                showSuccess('Counter incremented successfully!');
+                
+                // Update count
+                await updateCount();
+            } catch (error) {
+                log(`Error details: ${JSON.stringify(error)}`);
+                
+                let errorMessage = error.message;
+                if (error.code === 4001) {
+                    errorMessage = 'Transaction rejected by user.';
+                } else if (error.code === -32603) {
+                    errorMessage = 'Internal JSON-RPC error. This might be due to network congestion or RPC endpoint issues.';
+                }
+                
+                showError(`Failed to increment counter: ${errorMessage}`);
+            } finally {
+                isIncrementing = false;
+                incrementBtn.textContent = 'Increment';
+                incrementBtn.disabled = false;
+                resetBtn.disabled = currentCount == 0;
+            }
+        }
+        
+        // Reset counter
+        async function resetCounter() {
+            if (!currentAccount) {
+                showError('Please connect your wallet first.');
+                return;
+            }
+            
+            if (isResetting || currentCount == 0) return;
+            
+            try {
+                isResetting = true;
+                resetBtn.innerHTML = '<div class="spinner"></div> Resetting...';
+                resetBtn.disabled = true;
+                incrementBtn.disabled = true;
+                
+                showInfo('Resetting counter...');
+                
+                // Get gas price and add 100%
+                const gasPrice = await web3.eth.getGasPrice();
+                const gasPriceHex = web3.utils.toHex(Math.floor(gasPrice * 2));
+                log(`Gas price: ${web3.utils.fromWei(gasPrice, 'gwei')} gwei, using: ${web3.utils.fromWei(gasPriceHex, 'gwei')} gwei`);
+                
+                // Estimate gas
+                const gasEstimate = await counterContract.methods.reset().estimateGas({ from: currentAccount });
+                const gasLimitHex = web3.utils.toHex(Math.floor(gasEstimate * 1.2)); // Add 20% buffer
+                log(`Gas estimate: ${gasEstimate}, using limit: ${gasLimitHex}`);
+                
+                // Send transaction
+                const tx = await counterContract.methods.reset().send({
+                    from: currentAccount,
+                    gas: gasLimitHex,
+                    gasPrice: gasPriceHex
+                });
+                
+                log(`Transaction sent: ${tx.transactionHash}`);
+                
+                // Show transaction info
+                txInfo.innerHTML = `
+                    <div class="alert alert-info">
+                        <strong>Transaction Hash:</strong> 
+                        <a href="https://calibration.filfox.info/en/message/${tx.transactionHash}" target="_blank" class="text-break">
+                            ${tx.transactionHash}
+                        </a>
+                    </div>
+                `;
+                
+                showSuccess('Counter reset successfully!');
+                
+                // Update count
+                await updateCount();
+            } catch (error) {
+                log(`Error details: ${JSON.stringify(error)}`);
+                
+                let errorMessage = error.message;
+                if (error.code === 4001) {
+                    errorMessage = 'Transaction rejected by user.';
+                } else if (error.code === -32603) {
+                    errorMessage = 'Internal JSON-RPC error. This might be due to network congestion or RPC endpoint issues.';
+                }
+                
+                showError(`Failed to reset counter: ${errorMessage}`);
+            } finally {
+                isResetting = false;
+                resetBtn.textContent = 'Reset';
+                resetBtn.disabled = currentCount == 0;
+                incrementBtn.disabled = false;
+            }
+        }
+        
+        // Initialize the application
+        async function init() {
+            log('Initializing application...');
+            
+            // Try to initialize Web3 with RPC endpoints
+            const initialized = await initWeb3();
+            
+            if (initialized) {
+                log('Web3 initialized successfully.');
+                
+                // Set up event listeners
+                connectWalletBtn.addEventListener('click', connectWallet);
+                incrementBtn.addEventListener('click', incrementCounter);
+                resetBtn.addEventListener('click', resetCounter);
+                
+                // Check if MetaMask is already connected
+                if (window.ethereum && window.ethereum.selectedAddress) {
+                    log('MetaMask is already connected. Connecting automatically...');
+                    connectWallet();
+                }
+            } else {
+                log('Failed to initialize Web3.');
+            }
+        }
+        
+        // Start the application when the page loads
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
